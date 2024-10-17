@@ -1,0 +1,5 @@
+wordcloud
+openai
+streamlit
+pandas
+numpy
