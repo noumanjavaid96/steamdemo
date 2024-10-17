@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 from openai import OpenAI
 import altair as alt
 import random
+from collections import Counter
 
 # Set the app title and layout
 st.set_page_config(
@@ -26,11 +27,11 @@ api_key_input = st.sidebar.text_input(
 @st.cache_resource
 def get_openai_client(api_key_input):
     if api_key_input:
-        return OpenAI()
+        return OpenAI(api_key=api_key_input)
     return None
 
 # Initialize OpenAI client
-client = OpenAI(api_key=api_key_input)
+client = get_openai_client(api_key_input)
 
 if not api_key_input:
     st.sidebar.warning("Please enter your OpenAI API Key to proceed.")
@@ -41,7 +42,7 @@ st.title("🎮 Steam App Reviews Dashboard")
 st.sidebar.header("User Input Parameters")
 
 # User input for App ID
-appid = st.sidebar.text_input("Enter the Steam App ID:", value="271590")
+appid = st.sidebar.text_input("Enter the Steam App ID:", value="1782120")
 
 # Date input for selecting a week
 st.sidebar.write("Select the date range for reviews:")
@@ -186,26 +187,7 @@ else:
                 sentiments = []
                 for review_text in reviews:
                     # Prepare the prompt for GPT-4
-                    messages = [{"role": "user", "content": f"Please analyze the sentiment of the following Steam game review and classify it as 'Positive: Where the user is happy'\n, 'Negative: Where the user expressed disatisfaction',\n or 'Neutral'.\n\nReview: \"{review_text}\"\n\nSentiment: "}]
-                    tools = [
-                        {
-                            "type": "function",
-                            "function": {
-                                "name": "analyze_sentiment",
-                                "description": "Analyze the sentiment of the given text and the positive should be positive",
-                                "parameters": {
-                                    "type": "object",
-                                    "properties": {
-                                        "text": {
-                                            "type": "string",
-                                            "description": "The text to analyze",
-                                        }
-                                    },
-                                    "required": ["text"],
-                                },
-                            }
-                        }
-                    ]
+                    messages = [{"role": "user", "content": f"Please analyze the sentiment of the following Steam game review and classify it as 'Positive', 'Negative', or 'Neutral'.\n\nReview: \"{review_text}\"\n\nSentiment:"}]
 
                     try:
                         # Call OpenAI API
@@ -214,7 +196,7 @@ else:
                             messages=messages,
                             temperature=0
                         )
-                        sentiment = response.choices[0]["message"]["content"].strip() if "message" in response.choices[0] and "content" in response.choices[0]["message"] else 'Neutral'
+                        sentiment = response.choices[0].message.content.strip() if response.choices and response.choices[0].message and response.choices[0].message.content else 'Neutral'
                         # Ensure the sentiment is one of the expected values
                         if sentiment not in ["Positive", "Negative", "Neutral"]:
                             sentiment = "Neutral"
@@ -232,7 +214,7 @@ else:
             st.write("### Interactive Word Cloud of Reviews")
             all_reviews_text = " ".join(df["Review"])
             words = all_reviews_text.split()
-            word_freq = pd.DataFrame([{"word": word, "count": words.count(word)} for word in set(words)])
+            word_freq = pd.DataFrame(Counter(words).most_common(100), columns=["word", "count"])
 
             wordcloud_chart = alt.Chart(word_freq).mark_text().encode(
                 text="word",
@@ -241,7 +223,7 @@ else:
                 tooltip=["word", "count"]
             ).configure_mark(
                 align="center",
-                baseline="top"
+                baseline="middle"
             ).properties(
                 width=800,
                 height=400
